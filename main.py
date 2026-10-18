@@ -3,8 +3,8 @@ import json
 import requests
 import telebot
 
-# التوكن المباشر الخاص بك
-BOT_TOKEN = "8608324154:AAGyLW8fRqm_uJJGldQkS5XL5xCExEepQV0"
+# التوكن الجديد والنظيف الخاص بك
+BOT_TOKEN = "8608324154:AAGwUM_vWlBznqqB6sg7ov_NKTAMe3Yu3K8"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
