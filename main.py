@@ -3,16 +3,16 @@ import json
 import requests
 import telebot
 
-# جلب توكن البوت من متغيرات البيئة أو حطه مباشرة
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "حط_توكن_البوت_متاعك_هنا")
+# التوكن المباشر الخاص بك
+BOT_TOKEN = "8608324154:AAGyLW8fRqm_uJJGldQkS5XL5xCExEepQV0"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     welcome_text = (
-        "مرحباً بك في بوت فحص حسابات فري فاير! 🎮\n\n"
-        "أرسل الكوكي بصيغة JSON المنسوخ من Cookie-Editor لفحص الحساب."
+        "مرحباً بك يا عمر في بوت فحص حسابات فري فاير! 🎮\n\n"
+        "أرسل الكوكي بصيغة JSON المنسوخ من Cookie-Editor لفحص الحساب واستخراج البيانات."
     )
     bot.reply_to(message, welcome_text)
 
@@ -31,10 +31,8 @@ def handle_message(message):
                 name = cookie.get("name")
                 value = cookie.get("value")
                 if name and value:
-                    # تنظيف قيم الكوكي من أسطر جديدة أو مسافات خفية
                     cookies_dict[str(name).strip()] = str(value).strip()
 
-            # إعداد الهيدرز العادية بدون وضع كوكيز داخلها لمنع خطأ Control Character
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'application/json, text/plain, */*',
@@ -45,16 +43,14 @@ def handle_message(message):
 
             bot.reply_to(message, "⏳ جاري فحص الحساب واستخراج البيانات...")
 
-            # إرسال الطلب لموقع كارينا باستخدام وسيط cookies الرسمي
             url = "https://kiosgamer.co.id/api/login"
             response = requests.get(url, headers=headers, cookies=cookies_dict, timeout=10)
 
             if response.status_code == 200:
                 data = response.json()
-                # تخصيص جلب البيانات حسب استجابة السيرفر
                 account_id = data.get("open_id") or data.get("account_id") or "غير متوفر"
                 nickname = data.get("nickname") or data.get("name") or "غير متوفر"
-                region = cookies_dict.get("region", "ME/CO.ID")
+                region = cookies_dict.get("region", "CO.ID")
 
                 res_msg = (
                     "✅ **تم فحص الحساب بنجاح!**\n\n"
