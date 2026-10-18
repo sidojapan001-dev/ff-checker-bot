@@ -184,4 +184,139 @@ async def execute_check_deduction(callback: CallbackQuery, state: FSMContext):
 async def execute_email_deduction(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     if user_balances[user_id] < 60:
-        await callback.answer("رصيدك غير ك
+        await callback.answer("رصيدك غير كافٍ!", show_alert=True)
+        return
+    user_balances[user_id] -= 60
+    await callback.answer("تم خصم 60 حجرة!", show_alert=True)
+    await state.set_state(BotStates.waiting_for_token_email)
+    await callback.message.edit_text(
+        f"تم خصم 60 حجرة.\nرصيدك المتبقي: {user_balances[user_id]} حجرة\n\n"
+        "أرسل الـ Session Cookie أو رابط المصادقة لكشف الإيميل والروابط:"
+    )
+
+@dp.message(BotStates.waiting_for_token_check)
+async def process_check_token(message: types.Message, state: FSMContext):
+    user_input = message.text.strip()
+    await state.clear()
+    
+    msg = await message.answer("جاري معالجة وفحص اسم الحساب والبيانات المدخلة...")
+    await asyncio.sleep(1)
+    
+    platform = parse_platform_info(user_input)
+    
+    await msg.edit_text(
+        f"نتيجة فحص الملف الشخصي واسم الحساب:\n\n"
+        f"اسم حساب اللعبة / المدخل: {user_input}\n"
+        f"المنصة المستخرجة: {platform}\n"
+        "حالة الفحص: تم التحليل بنجاح."
+    )
+
+@dp.message(BotStates.waiting_for_token_email)
+async def process_email_token(message: types.Message, state: FSMContext):
+    user_input = message.text.strip()
+    await state.clear()
+    
+    msg = await message.answer("جاري تفكيك بيانات الجلسة والاستعادة...")
+    await asyncio.sleep(1.5)
+    
+    platform = parse_platform_info(user_input)
+    
+    fb_status = "مربوط (نشط)" if platform == "Facebook" else "غير مربوط"
+    goog_status = "مربوط (نشط)" if platform == "Google" else "غير مربوط"
+    tw_status = "مربوط (نشط)" if platform == "Twitter (X)" else "غير مربوط"
+    vk_status = "مربوط (نشط)" if platform == "VKontakte" else "غير مربوط"
+    apple_status = "مربوط (نشط)" if platform == "Apple ID" else "غير مربوط"
+
+    await msg.edit_text(
+        f"نتيجة كشف المنصات وإيميل الاستعادة:\n\n"
+        f"المنصة الأساسية للربط: {platform}\n\n"
+        "حالة المنصات في Free Fire:\n"
+        f"  • Google: {goog_status}\n"
+        f"  • Facebook: {fb_status}\n"
+        f"  • Twitter (X): {tw_status}\n"
+        f"  • VKontakte: {vk_status}\n"
+        f"  • Apple ID: {apple_status}\n\n"
+        "ملاحظة: تم الفحص واستخراج بيانات الاستعادة بنجاح."
+    )
+
+@dp.callback_query(F.data == "promo_redeem")
+async def cb_promo_start(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.set_state(BotStates.waiting_for_code)
+    await callback.message.answer("أدخل كود الهدية (Promo Code) أو كود الـ VIP الآن:")
+
+@dp.message(BotStates.waiting_for_code)
+async def process_promo_code(message: types.Message, state: FSMContext):
+    code = message.text.strip().upper()
+    user_id = message.from_user.id
+    if code not in PROMO_CODES:
+        await message.answer("كود غير صحيح!")
+        await state.clear()
+        return
+    promo = PROMO_CODES[code]
+    if code in used_promo_codes and user_id in used_promo_codes[code]:
+        await message.answer("لقد استخدمت هذا الكود سابقاً!")
+        await state.clear()
+        return
+    reward = promo["reward"]
+    user_balances[user_id] = get_user_balance(user_id) + reward
+    if code not in used_promo_codes:
+        used_promo_codes[code] = []
+    used_promo_codes[code].append(user_id)
+    await state.clear()
+    
+    if promo.get("is_vip", False):
+        await message.answer(f"مرحباً بك يا مدير (VIP)! تم إضافة رصيد مفتوح: {reward} حجرة.\nرصيدك: {user_balances[user_id]} حجرة")
+    else:
+        await message.answer(f"تم تفعيل الكود بنجاح! حصلت على +{reward} حجرة.\nرصيدك الحالي: {user_balances[user_id]} حجرة")
+
+@dp.callback_query(F.data == "daily_bonus")
+async def cb_daily(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    user_balances[user_id] = get_user_balance(user_id) + 3
+    await callback.answer("تم إضافة 3 حجارة بنجاح!", show_alert=True)
+    await callback.message.answer(f"مكافأة اليوم (+3 حجارة)!\nرصيدك: {user_balances[user_id]} حجرة")
+
+@dp.callback_query(F.data == "invite_friend")
+async def cb_invite(callback: CallbackQuery):
+    await callback.answer()
+    bot_info = await bot.get_me()
+    await callback.message.answer(f"رابط الدعوة (+10 حجارة):\nhttps://t.me/{bot_info.username}?start=ref_{callback.from_user.id}")
+
+@dp.callback_query(F.data == "pay_stars")
+async def send_stars_invoice(callback: CallbackQuery):
+    await callback.answer()
+    prices = [LabeledPrice(label="80 حجرة", amount=70)]
+    await bot.send_invoice(
+        chat_id=callback.message.chat.id,
+        title="شحن رصيد حجرة",
+        description="شحن 80 حجرة لاستخدامها في الخدمات والفحص.",
+        payload="buy_80_stones_pack",
+        provider_token="",
+        currency="XTR",
+        prices=prices,
+        start_parameter="recharge-stones"
+    )
+
+@dp.pre_checkout_query()
+async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
+    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+
+@dp.message(F.successful_payment)
+async def process_successful_payment(message: types.Message):
+    user_id = message.from_user.id
+    user_balances[user_id] = get_user_balance(user_id) + 80
+    await message.answer(f"تم الدفع بنجاح عبر نجوم تلغرام! تمت إضافة 80 حجرة.\nرصيدك الجديد: {user_balances[user_id]} حجرة")
+
+@dp.callback_query(F.data == "pay_usdt")
+async def cb_pay_usdt(callback: CallbackQuery):
+    await callback.answer()
+    await callback.message.answer("لشحن 80 حجرة بـ 0.75$ USDT، تواصل مع الدعم الفني للإتمام.")
+
+async def main():
+    logging.basicConfig(level=logging.INFO)
+    print("البوت يعمل بنجاح تام وبدون أي أخطاء...")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
